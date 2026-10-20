@@ -115,7 +115,7 @@ BOOL CPluginManagerDlg::OnInitDialog()
     m_list_ctrl.InsertColumn(COL_STATUS, CCommon::LoadText(IDS_STATUS), LVCFMT_LEFT, width3);
 
     //添加图标
-    int item_num = theApp.m_plugins.GetPlugins().size();
+    const int item_num = static_cast<int>(theApp.m_plugins.GetPlugins().size());
     m_plugin_icon_list.Create(theApp.DPI(16), theApp.DPI(16), ILC_COLOR32, item_num, item_num);
     for (const auto& plugin : theApp.m_plugins.GetPlugins())
     {

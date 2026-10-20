@@ -3,6 +3,7 @@
 
 #include "stdafx.h"
 #include "CTabCtrlEx.h"
+#include <climits>
 
 
 // CTabCtrlEx
@@ -23,7 +24,10 @@ void CTabCtrlEx::AddWindow(CWnd* pWnd, LPCTSTR lable_text)
 	if (pWnd == nullptr || pWnd->GetSafeHwnd() == NULL)
 		return;
 
-    InsertItem(m_tab_list.size(), lable_text, m_tab_list.size());
+    if (m_tab_list.size() >= static_cast<size_t>(INT_MAX))
+        return; // Win32 tab APIs accept only int indexes.
+    const int tab_index = static_cast<int>(m_tab_list.size());
+    InsertItem(tab_index, lable_text, tab_index);
 
 	pWnd->SetParent(this);
 	pWnd->MoveWindow(m_tab_rect);
@@ -37,7 +41,7 @@ void CTabCtrlEx::SetCurTab(int index)
         index = 0;
 	SetCurSel(index);
 
-	int tab_size = m_tab_list.size();
+	const int tab_size = static_cast<int>(m_tab_list.size());
 	for (int i = 0; i < tab_size; i++)
 	{
 		if (i == index)
@@ -55,7 +59,7 @@ void CTabCtrlEx::SetCurTab(int index)
 CWnd* CTabCtrlEx::GetCurrentTab()
 {
     int cur_tab_index = GetCurSel();
-    if (cur_tab_index >= 0 && cur_tab_index < m_tab_list.size())
+    if (cur_tab_index >= 0 && cur_tab_index < static_cast<int>(m_tab_list.size()))
     {
         return m_tab_list[cur_tab_index];
     }

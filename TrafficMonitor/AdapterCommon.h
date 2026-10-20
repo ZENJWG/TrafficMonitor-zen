@@ -1,17 +1,18 @@
-#pragma once
+ï»¿#pragma once
 #include "Common.h"
 
-//±£´æÒ»¸öÍøÂçÁ¬½ÓĞÅÏ¢
+//ï¿½ï¿½ï¿½ï¿½Ò»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ï¢
 struct NetWorkConection
 {
-	int index{};			//¸ÃÁ¬½ÓÔÚMIB_IFTABLEÖĞµÄË÷Òı
-	string description;		//ÍøÂçÃèÊö£¨»ñÈ¡×ÔGetAdapterInfo£©
-	string description_2;	//ÍøÂçÃèÊö£¨»ñÈ¡×ÔGetIfTable£©
-	unsigned int in_bytes;	//³õÊ¼Ê±ÒÑ½ÓÊÕ×Ö½ÚÊı
-	unsigned int out_bytes;	//³õÊ¼Ê±ÒÑ·¢ËÍ×Ö½ÚÊı
-	wstring ip_address{ L"-.-.-.-" };	//IPµØÖ·
-	wstring subnet_mask{ L"-.-.-.-" };	//×ÓÍøÑÚÂë
-	wstring default_gateway{ L"-.-.-.-" };	//Ä¬ÈÏÍø¹Ø
+	int index{ -1 };
+	DWORD interface_index{};			//ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½MIB_IFTABLEï¿½Ğµï¿½ï¿½ï¿½ï¿½ï¿½
+	string description;		//ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½È¡ï¿½ï¿½GetAdapterInfoï¿½ï¿½
+	string description_2;	//ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½È¡ï¿½ï¿½GetIfTableï¿½ï¿½
+	unsigned int in_bytes{};	//ï¿½ï¿½Ê¼Ê±ï¿½Ñ½ï¿½ï¿½ï¿½ï¿½Ö½ï¿½ï¿½ï¿½
+	unsigned int out_bytes{};	//ï¿½ï¿½Ê¼Ê±ï¿½Ñ·ï¿½ï¿½ï¿½ï¿½Ö½ï¿½ï¿½ï¿½
+	wstring ip_address{ L"-.-.-.-" };	//IPï¿½ï¿½Ö·
+	wstring subnet_mask{ L"-.-.-.-" };	//ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+	wstring default_gateway{ L"-.-.-.-" };	//Ä¬ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 };
 
 class CAdapterCommon
@@ -20,22 +21,22 @@ public:
 	CAdapterCommon();
 	~CAdapterCommon();
 
-	//»ñÈ¡ÍøÂçÁ¬½ÓÁĞ±í£¬Ìî³äÍøÂçÃèÊö¡¢IPµØÖ·¡¢×ÓÍøÑÚÂë¡¢Ä¬ÈÏÍø¹ØĞÅÏ¢
+	//ï¿½ï¿½È¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ğ±ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½IPï¿½ï¿½Ö·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ë¡¢Ä¬ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ï¢
 	static void GetAdapterInfo(vector<NetWorkConection>& adapters);
 
-	//Ë¢ĞÂÍøÂçÁ¬½ÓÁĞ±íÖĞµÄIPµØÖ·¡¢×ÓÍøÑÚÂë¡¢Ä¬ÈÏÍø¹ØĞÅÏ¢
+	//Ë¢ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ğ±ï¿½ï¿½Ğµï¿½IPï¿½ï¿½Ö·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ë¡¢Ä¬ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ï¢
 	static void RefreshIpAddress(vector<NetWorkConection>& adapters);
 
-	//»ñÈ¡ÍøÂçÁĞ±íÖĞÃ¿¸öÍøÂçÁ¬½ÓµÄMIB_IFTABLEÖĞµÄË÷Òı¡¢³õÊ¼Ê±ÒÑ½ÓÊÕ/·¢ËÍ×Ö½ÚÊıµÄĞÅÏ¢
+	//ï¿½ï¿½È¡ï¿½ï¿½ï¿½ï¿½ï¿½Ğ±ï¿½ï¿½ï¿½Ã¿ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Óµï¿½MIB_IFTABLEï¿½Ğµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê¼Ê±ï¿½Ñ½ï¿½ï¿½ï¿½/ï¿½ï¿½ï¿½ï¿½ï¿½Ö½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ï¢
 	static void GetIfTableInfo(vector<NetWorkConection>& adapters, MIB_IFTABLE* pIfTable);
 
-	//Ö±½Ó½«MIB_IFTABLEÖĞµÄËùÓĞÁ¬½ÓÌí¼Óµ½adaptersÈİÆ÷ÖĞ
+	//Ö±ï¿½Ó½ï¿½MIB_IFTABLEï¿½Ğµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Óµï¿½adaptersï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 	static void GetAllIfTableInfo(vector<NetWorkConection>& adapters, MIB_IFTABLE* pIfTable);
 private:
-	//¸ù¾İÒ»¸öÍøÂçÁ¬½ÓÃèÊöÅĞ¶ÏÊÇ·ñÔÚIfTableÁĞ±íÀï£¬·µ»ØË÷Òı£¬ÕÒ²»µ½Ôò·µ»Ø-1
+	//ï¿½ï¿½ï¿½ï¿½Ò»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ğ¶ï¿½ï¿½Ç·ï¿½ï¿½ï¿½IfTableï¿½Ğ±ï¿½ï¿½ï£¬ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ò²ï¿½ï¿½ï¿½ï¿½ò·µ»ï¿½-1
 	static int FindConnectionInIfTable(string connection, MIB_IFTABLE* pIfTable);
 
-	//¸ù¾İÒ»¸öÍøÂçÁ¬½ÓÃèÊöÅĞ¶ÏÊÇ·ñÔÚIfTable½ÓÁĞ±íÀï£¬·µ»ØË÷Òı£¬ÕÒ²»µ½Ôò·µ»Ø-1¡£Ö»ĞèÒª²¿·ÖÆ¥Åä
+	//ï¿½ï¿½ï¿½ï¿½Ò»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ğ¶ï¿½ï¿½Ç·ï¿½ï¿½ï¿½IfTableï¿½ï¿½ï¿½Ğ±ï¿½ï¿½ï£¬ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ò²ï¿½ï¿½ï¿½ï¿½ò·µ»ï¿½-1ï¿½ï¿½Ö»ï¿½ï¿½Òªï¿½ï¿½ï¿½ï¿½Æ¥ï¿½ï¿½
 	static int FindConnectionInIfTableFuzzy(string connection, MIB_IFTABLE* pIfTable);
 };
 

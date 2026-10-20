@@ -18,6 +18,9 @@
 #include "WineTaskbarDlg.h"
 #include "TaskbarHelper.h"
 #include "SkinManager.h"
+#include "NetworkSampling.h"
+#include <chrono>
+#include <unordered_set>
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -313,8 +316,8 @@ POINT CTrafficMonitorDlg::CalculateWindowMoveOffset(CRect rect, bool screen_chan
             {
                 float proportion_width = (float)rect.left / (last_screen_rect.right - rect.Width());
                 float proportion_height = (float)rect.top / (last_screen_rect.bottom - rect.Height());
-                x = (a.right - rect.Width()) * proportion_width - rect.left;
-                y = (a.bottom - rect.Height()) * proportion_height - rect.top;
+                x = static_cast<int>((a.right - rect.Width()) * proportion_width - rect.left);
+                y = static_cast<int>((a.bottom - rect.Height()) * proportion_height - rect.top);
             }
             else
             {
@@ -378,14 +381,14 @@ void CTrafficMonitorDlg::AutoSelect()
     //自动选择连接时，查找已发送和已接收字节数之和最多的那个连接，并将其设置为当前查看的连接
     for (size_t i{}; i < m_connections.size(); i++)
     {
-        auto table = GetConnectIfTable(i);
+        auto table = GetConnectIfTable(static_cast<int>(i));
         if (table.dwOperStatus == IF_OPER_STATUS_OPERATIONAL)     //只选择网络状态为正常的连接
         {
-            in_out_bytes = table.dwInOctets + table.dwOutOctets;
+            in_out_bytes = static_cast<unsigned __int64>(table.dwInOctets) + table.dwOutOctets;
             if (in_out_bytes > max_in_out_bytes)
             {
                 max_in_out_bytes = in_out_bytes;
-                m_connection_selected = i;
+                m_connection_selected = static_cast<int>(i);
             }
         }
     }
@@ -395,18 +398,12 @@ void CTrafficMonitorDlg::AutoSelect()
 
 void CTrafficMonitorDlg::IniConnection()
 {
-    //为m_pIfTable开辟所需大小的内存
-    free(m_pIfTable);
-    m_dwSize = sizeof(MIB_IFTABLE);
-    m_pIfTable = (MIB_IFTABLE*)malloc(m_dwSize);
-    int rtn;
-    rtn = GetIfTable(m_pIfTable, &m_dwSize, FALSE);
-    if (rtn == ERROR_INSUFFICIENT_BUFFER)	//如果函数返回值为ERROR_INSUFFICIENT_BUFFER，说明m_pIfTable的大小不够
+    // Only consume a fully initialized interface table.
+    if (!NetworkSampling::RefreshLegacyTable(m_pIfTable, m_dwSize))
     {
-        free(m_pIfTable);
-        m_pIfTable = (MIB_IFTABLE*)malloc(m_dwSize);	//用新的大小重新开辟一块内存
+        CCommon::WriteLog(L"GetIfTable failed during initialization.", theApp.m_log_path.c_str());
+        return;
     }
-    GetIfTable(m_pIfTable, &m_dwSize, FALSE);
 
     //获取当前所有的连接，并保存到m_connections容器中
     if (!theApp.m_general_data.show_all_interface)
@@ -451,7 +448,10 @@ void CTrafficMonitorDlg::IniConnection()
         {
             log_str += CCommon::IntToString(i);
             log_str += _T(" ");
-            log_str += (const char*)m_pIfTable->table[i].bDescr;
+            const auto& row = m_pIfTable->table[i];
+            const std::string description(reinterpret_cast<const char*>(row.bDescr),
+                std::min<DWORD>(row.dwDescrLen, MAXLEN_IFDESCR));
+            log_str += description.c_str();
             log_str += _T("\n");
         }
         CCommon::WriteLog(log_str, (theApp.m_config_dir + L".\\connections.log").c_str());
@@ -478,7 +478,7 @@ void CTrafficMonitorDlg::IniConnection()
         for (size_t i{}; i < m_connections.size(); i++)
         {
             if (m_connections[i].description_2 == m_connection_name_preferd)
-                m_connection_selected = i;
+                m_connection_selected = static_cast<int>(i);
         }
     }
     if (m_connection_selected < 0 || m_connection_selected >= m_connections.size())
@@ -497,13 +497,25 @@ void CTrafficMonitorDlg::IniConnection()
 
 MIB_IFROW CTrafficMonitorDlg::GetConnectIfTable(int connection_index)
 {
-    if (connection_index >= 0 && connection_index < static_cast<int>(m_connections.size()))
+    if (!m_pIfTable || connection_index < 0 ||
+        connection_index >= static_cast<int>(m_connections.size()))
+        return MIB_IFROW{};
+
+    const auto& selected = m_connections[connection_index];
+    if (selected.interface_index == 0)
+        return MIB_IFROW{};
+    if (selected.index >= 0 &&
+        static_cast<DWORD>(selected.index) < m_pIfTable->dwNumEntries &&
+        m_pIfTable->table[selected.index].dwIndex == selected.interface_index)
+        return m_pIfTable->table[selected.index];
+    // Rows may be reordered after hot-plug; the OS interface index identifies
+    // the selected adapter, not the table position.
+    for (DWORD row = 0; row < m_pIfTable->dwNumEntries; ++row)
     {
-        int index = m_connections[connection_index].index;
-        if (m_pIfTable != nullptr && index >= 0 && index < m_pIfTable->dwNumEntries)
-            return m_pIfTable->table[index];
+        if (m_pIfTable->table[row].dwIndex == selected.interface_index)
+            return m_pIfTable->table[row];
     }
-    return MIB_IFROW();
+    return MIB_IFROW{};
 }
 
 NetWorkConection CTrafficMonitorDlg::GetConnection(int connection_index)
@@ -549,11 +561,11 @@ void CTrafficMonitorDlg::IniTaskBarConnectionMenu()
 void CTrafficMonitorDlg::SetConnectionMenuState(CMenu* pMenu)
 {
     if (theApp.m_cfg_data.m_select_all)
-        pMenu->CheckMenuRadioItem(0, m_connections.size() + 1, 1, MF_BYPOSITION | MF_CHECKED);
+        pMenu->CheckMenuRadioItem(0, static_cast<UINT>(m_connections.size() + 1), 1, MF_BYPOSITION | MF_CHECKED);
     else if (theApp.m_cfg_data.m_auto_select)       //m_auto_select为true时为自动选择，选中菜单的第1项
-        pMenu->CheckMenuRadioItem(0, m_connections.size() + 1, 0, MF_BYPOSITION | MF_CHECKED);
+        pMenu->CheckMenuRadioItem(0, static_cast<UINT>(m_connections.size() + 1), 0, MF_BYPOSITION | MF_CHECKED);
     else        //m_auto_select为false时非自动选择，根据m_connection_selected的值选择对应的项
-        pMenu->CheckMenuRadioItem(0, m_connections.size() + 1, m_connection_selected + 2, MF_BYPOSITION | MF_CHECKED);
+        pMenu->CheckMenuRadioItem(0, static_cast<UINT>(m_connections.size() + 1), m_connection_selected + 2, MF_BYPOSITION | MF_CHECKED);
 
     //没有设置为“选择全部”时，将当前选择项设置为默认菜单项（加粗显示）
     if (!theApp.m_cfg_data.m_select_all)
@@ -1151,7 +1163,7 @@ BOOL CTrafficMonitorDlg::OnInitDialog()
     SetTimer(MAIN_TIMER, 1000, NULL);
 
     SetTimer(MONITOR_TIMER, theApp.m_general_data.monitor_time_span, NULL);
-    AfxBeginThread(MonitorThreadCallback, (LPVOID)this);
+    m_monitor_thread_started = (AfxBeginThread(MonitorThreadCallback, (LPVOID)this) != nullptr);
 
     //初始化窗口位置
     SetItemPosition();
@@ -1201,89 +1213,67 @@ static int GetMonitorTimerCount(int second)
 
 void CTrafficMonitorDlg::DoMonitorAcquisition()
 {
-    //获取网络连接速度
-    int rtn{};
-    auto getLfTable = [&]() {
-        __try
-        {
-            rtn = GetIfTable(m_pIfTable, &m_dwSize, FALSE);
-        }
-        __except (EXCEPTION_EXECUTE_HANDLER)
-        {
-            free(m_pIfTable);
-            m_dwSize = sizeof(MIB_IFTABLE);
-            m_pIfTable = (MIB_IFTABLE*)malloc(m_dwSize);
-            rtn = GetIfTable(m_pIfTable, &m_dwSize, FALSE);
-            if (rtn == ERROR_INSUFFICIENT_BUFFER)	//如果函数返回值为ERROR_INSUFFICIENT_BUFFER，说明m_pIfTable的大小不够
-            {
-                free(m_pIfTable);
-                m_pIfTable = (MIB_IFTABLE*)malloc(m_dwSize);	//用新的大小重新开辟一块内存
-            }
-            GetIfTable(m_pIfTable, &m_dwSize, FALSE);
-        }
+    // Keep the legacy table for the existing UI/adapter index mapping.
+    // GetIfTable2 supplies 64-bit counters to avoid high-speed 32-bit rollover.
+    auto failSample = [&]() {
+        theApp.m_in_speed = 0;
+        theApp.m_out_speed = 0;
+        m_connection_change_flag = true; // fresh baseline after recovery
     };
-
-    getLfTable();
-
-    if (!theApp.m_cfg_data.m_select_all)        //获取当前选中连接的网速
+    if (!NetworkSampling::RefreshLegacyTable(m_pIfTable, m_dwSize))
     {
-        auto table = GetConnectIfTable(m_connection_selected);
-        m_in_bytes = table.dwInOctets;
-        m_out_bytes = table.dwOutOctets;
+        failSample();
+        return;
     }
-    else        //获取全部连接的网速
+
+    std::vector<NET_IFINDEX> interfaceIndices;
+    if (!theApp.m_cfg_data.m_select_all)
     {
-        m_in_bytes = 0;
-        m_out_bytes = 0;
-        for (size_t i{}; i < m_connections.size(); i++)
+        if (m_connection_selected < 0 ||
+            m_connection_selected >= static_cast<int>(m_connections.size()))
         {
-            auto table = GetConnectIfTable(i);
-            //if (i > 0 && m_pIfTable->table[m_connections[i].index].dwInOctets == m_pIfTable->table[m_connections[i - 1].index].dwInOctets
-            //  && m_pIfTable->table[m_connections[i].index].dwOutOctets == m_pIfTable->table[m_connections[i - 1].index].dwOutOctets)
-            //  continue;       //连接列表中可能会有相同的连接，统计所有连接的网速时，忽略掉已发送和已接收字节数完全相同的连接
-            m_in_bytes += table.dwInOctets;
-            m_out_bytes += table.dwOutOctets;
+            failSample();
+            return;
         }
-    }
-
-    unsigned __int64 cur_in_speed{}, cur_out_speed{};       //本次监控时间间隔内的上传和下载速度
-
-    //如果发送和接收的字节数为0或上次发送和接收的字节数为0或当前连接已改变时，网速无效
-    if ((m_in_bytes == 0 && m_out_bytes == 0) || (m_last_in_bytes == 0 && m_last_out_bytes == 0) || m_connection_change_flag
-        || m_last_in_bytes > m_in_bytes || m_last_out_bytes > m_out_bytes)
-    {
-        cur_in_speed = 0;
-        cur_out_speed = 0;
+        interfaceIndices.push_back(m_connections[m_connection_selected].interface_index);
     }
     else
     {
-        cur_in_speed = m_in_bytes - m_last_in_bytes;
-        cur_out_speed = m_out_bytes - m_last_out_bytes;
+        interfaceIndices.reserve(m_connections.size());
+        for (const auto& connection : m_connections)
+            interfaceIndices.push_back(connection.interface_index);
     }
-    ////如果大于1GB/s，说明可能产生了异常，网速无效
-    //if (cur_in_speed > 1073741824)
-    //  cur_in_speed = 0;
-    //if (cur_out_speed > 1073741824)
-    //  cur_out_speed = 0;
 
-    //计算两次获取网速的时间间隔
-    static ULONGLONG last_net_speed_time = 0;
-    ULONGLONG net_speed_time = CCommon::GetCurrentTimeSinceEpochMilliseconds();
-    int time_span = theApp.m_general_data.monitor_time_span;
-    if (last_net_speed_time != 0)
-        time_span = static_cast<int>(net_speed_time - last_net_speed_time);
-    last_net_speed_time = net_speed_time;
+    NetworkSampling::Counters current{};
+    if (!NetworkSampling::Read64BitCounters(interfaceIndices, current))
+    {
+        failSample();
+        return;
+    }
 
-    //将当前监控时间间隔的流量转换成每秒时间间隔内的流量
-    theApp.m_in_speed = static_cast<unsigned __int64>(cur_in_speed * 1000 / time_span);
-    theApp.m_out_speed = static_cast<unsigned __int64>(cur_out_speed * 1000 / time_span);
+    m_in_bytes = current.received;
+    m_out_bytes = current.sent;
 
-    m_connection_change_flag = false;    //清除连接发生变化的标志
+    // Use a monotonic clock. Wall-clock adjustments must not change rates.
+    static auto last_sample_time = std::chrono::steady_clock::time_point{};
+    const auto now = std::chrono::steady_clock::now();
+    const double seconds = last_sample_time.time_since_epoch().count() == 0
+        ? 0.0 : std::chrono::duration<double>(now - last_sample_time).count();
+    last_sample_time = now;
 
+    const bool baseline_invalid = m_connection_change_flag || seconds <= 0.0;
+    const auto cur_in_speed = baseline_invalid ? 0ULL
+        : TrafficRateMath::Delta(m_last_in_bytes, m_in_bytes);
+    const auto cur_out_speed = baseline_invalid ? 0ULL
+        : TrafficRateMath::Delta(m_last_out_bytes, m_out_bytes);
+
+    theApp.m_in_speed = TrafficRateMath::SafeRate(cur_in_speed, seconds);
+    theApp.m_out_speed = TrafficRateMath::SafeRate(cur_out_speed, seconds);
+
+    m_connection_change_flag = false;
     m_last_in_bytes = m_in_bytes;
     m_last_out_bytes = m_out_bytes;
 
-    //处于自动选择状态时，如果连续30秒没有网速，则可能自动选择的网络不对，此时执行一次自动选择
     if (theApp.m_cfg_data.m_auto_select)
     {
         if (cur_in_speed == 0 && cur_out_speed == 0)
@@ -1344,14 +1334,6 @@ void CTrafficMonitorDlg::DoMonitorAcquisition()
                 last_today_kbytes = current_kbytes;
             }
         }
-    }
-
-    if (rtn == ERROR_INSUFFICIENT_BUFFER)
-    {
-        IniConnection();
-        CString info = CCommon::LoadText(IDS_INSUFFICIENT_BUFFER);
-        info.Replace(_T("<%cnt%>"), CCommon::IntToString(m_restart_cnt));
-        CCommon::WriteLog(info, theApp.m_log_path.c_str());
     }
 
     if (m_monitor_time_cnt % GetMonitorTimerCount(3) == GetMonitorTimerCount(3) - 1)
@@ -1565,11 +1547,11 @@ void CTrafficMonitorDlg::DoMonitorAcquisition()
             monitor_info.memory_usage = theApp.m_memory_usage;
             monitor_info.gpu_usage = theApp.m_gpu_usage;
             monitor_info.hdd_usage = theApp.m_hdd_usage;
-            monitor_info.cpu_temperature = theApp.m_cpu_temperature;
-            monitor_info.gpu_temperature = theApp.m_gpu_temperature;
-            monitor_info.hdd_temperature = theApp.m_hdd_temperature;
-            monitor_info.cpu_freq = theApp.m_cpu_freq;
-            monitor_info.main_board_temperature = theApp.m_main_board_temperature;
+            monitor_info.cpu_temperature = static_cast<int>(theApp.m_cpu_temperature);
+            monitor_info.gpu_temperature = static_cast<int>(theApp.m_gpu_temperature);
+            monitor_info.hdd_temperature = static_cast<int>(theApp.m_hdd_temperature);
+            monitor_info.cpu_freq = static_cast<int>(theApp.m_cpu_freq);
+            monitor_info.main_board_temperature = static_cast<int>(theApp.m_main_board_temperature);
             plugin_info.plugin->OnMonitorInfo(monitor_info);
         }
     }
@@ -1577,48 +1559,59 @@ void CTrafficMonitorDlg::DoMonitorAcquisition()
     m_monitor_time_cnt++;
 
     //发送监控信息更新消息
-    SendMessage(WM_MONITOR_INFO_UPDATED);
+    PostMessage(WM_MONITOR_INFO_UPDATED);
 }
 
 UINT CTrafficMonitorDlg::MonitorThreadCallback(LPVOID dwUser)
 {
-    CTrafficMonitorDlg* pThis = (CTrafficMonitorDlg*)dwUser;
-    while (true)
+    auto* monitor = static_cast<CTrafficMonitorDlg*>(dwUser);
+    for (;;)
     {
-        //获取一次监控数据
-        if (pThis->m_monitor_data_required)
-        {
-            pThis->DoMonitorAcquisition();
-            //获取到监控数据后重置flag
-            pThis->m_monitor_data_required = false;
-        }
-        else
-        {
-            Sleep(10);
-        }
-
-        // 检查退出标志
-        if (pThis->m_is_thread_exit)
-        {
-            // 触发事件，通知主线程工作线程已退出
-            pThis->m_threadExitEvent.SetEvent();
-            return 0;
-        }
+        ::WaitForSingleObject(monitor->m_monitorRequestEvent.m_hObject, INFINITE);
+        if (monitor->m_is_thread_exit.load())
+            break;
+        if (monitor->m_monitor_data_required.exchange(false))
+            monitor->DoMonitorAcquisition();
     }
-
+    monitor->m_threadExitEvent.SetEvent();
     return 0;
 }
 
-
 void CTrafficMonitorDlg::ExitMonitorThread()
 {
-    // 通知线程退出
+    if (!m_monitor_thread_started)
+        return;
     m_is_thread_exit = true;
+    m_monitorRequestEvent.SetEvent();
 
-    // 等待线程退出
-    ::WaitForSingleObject(m_threadExitEvent.m_hObject, 1000);
+    // Pump synchronous window messages while joining: the monitor worker
+    // historically uses some window-related functions.
+    HANDLE exitHandle = m_threadExitEvent.m_hObject;
+    for (;;)
+    {
+        DWORD state = ::MsgWaitForMultipleObjects(1, &exitHandle, FALSE,
+            INFINITE, QS_ALLINPUT);
+        if (state == WAIT_OBJECT_0)
+            break;
+        if (state == WAIT_OBJECT_0 + 1)
+        {
+            MSG msg{};
+            while (::PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
+            {
+                if (msg.message == WM_QUIT)
+                {
+                    ::PostQuitMessage(static_cast<int>(msg.wParam));
+                    break;
+                }
+                ::TranslateMessage(&msg);
+                ::DispatchMessage(&msg);
+            }
+        }
+        else
+            break; // WAIT_FAILED: report this in debugging; cannot safely force-stop.
+    }
+    m_monitor_thread_started = false;
 }
-
 
 void CTrafficMonitorDlg::OnTimer(UINT_PTR nIDEvent)
 {
@@ -1627,6 +1620,7 @@ void CTrafficMonitorDlg::OnTimer(UINT_PTR nIDEvent)
     {
         //通知线程获取监控数据
         m_monitor_data_required = true;
+        m_monitorRequestEvent.SetEvent();
     }
 
     if (nIDEvent == MAIN_TIMER)
@@ -1802,25 +1796,25 @@ void CTrafficMonitorDlg::OnTimer(UINT_PTR nIDEvent)
         info.Format(CCommon::LoadText(IDS_CPU_TEMPERATURE_EXCEED, _T(" %d°C!")), static_cast<int>(theApp.m_cpu_temperature));
         static int last_cpu_temp;
         static int cpu_temp_notify_time{ -theApp.m_notify_interval };       //记录上次弹出提示时的时间
-        checkNotifyTip(theApp.m_general_data.cpu_temp_tip, theApp.m_cpu_temperature, last_cpu_temp, cpu_temp_notify_time, info.GetString());
+        checkNotifyTip(theApp.m_general_data.cpu_temp_tip, static_cast<int>(theApp.m_cpu_temperature), last_cpu_temp, cpu_temp_notify_time, info.GetString());
 
         //检查是否要弹出显卡温度使用率超出提示
         info.Format(CCommon::LoadText(IDS_GPU_TEMPERATURE_EXCEED, _T(" %d°C!")), static_cast<int>(theApp.m_gpu_temperature));
         static int last_gpu_temp;
         static int gpu_temp_notify_time{ -theApp.m_notify_interval };       //记录上次弹出提示时的时间
-        checkNotifyTip(theApp.m_general_data.gpu_temp_tip, theApp.m_gpu_temperature, last_gpu_temp, gpu_temp_notify_time, info.GetString());
+        checkNotifyTip(theApp.m_general_data.gpu_temp_tip, static_cast<int>(theApp.m_gpu_temperature), last_gpu_temp, gpu_temp_notify_time, info.GetString());
 
         //检查是否要弹出硬盘温度使用率超出提示
         info.Format(CCommon::LoadText(IDS_HDD_TEMPERATURE_EXCEED, _T(" %d°C!")), static_cast<int>(theApp.m_hdd_temperature));
         static int last_hdd_temp;
         static int hdd_temp_notify_time{ -theApp.m_notify_interval };       //记录上次弹出提示时的时间
-        checkNotifyTip(theApp.m_general_data.hdd_temp_tip, theApp.m_hdd_temperature, last_hdd_temp, hdd_temp_notify_time, info.GetString());
+        checkNotifyTip(theApp.m_general_data.hdd_temp_tip, static_cast<int>(theApp.m_hdd_temperature), last_hdd_temp, hdd_temp_notify_time, info.GetString());
 
         //检查是否要弹出主板温度使用率超出提示
         info.Format(CCommon::LoadText(IDS_MBD_TEMPERATURE_EXCEED, _T(" %d°C!")), static_cast<int>(theApp.m_main_board_temperature));
         static int last_main_board_temp;
         static int main_board_temp_notify_time{ -theApp.m_notify_interval };        //记录上次弹出提示时的时间
-        checkNotifyTip(theApp.m_general_data.mainboard_temp_tip, theApp.m_main_board_temperature, last_main_board_temp, main_board_temp_notify_time, info.GetString());
+        checkNotifyTip(theApp.m_general_data.mainboard_temp_tip, static_cast<int>(theApp.m_main_board_temperature), last_main_board_temp, main_board_temp_notify_time, info.GetString());
 
 
         //检查是否要弹出流量使用超出提示
@@ -2126,10 +2120,31 @@ void CTrafficMonitorDlg::OnNetworkInfo()
 {
     // TODO: 在此添加命令处理程序代码
     //弹出“连接详情”对话框
-    CNetworkInfoDlg aDlg(m_connections, m_pIfTable->table, m_connection_selected);
-    ////向CNetworkInfoDlg类传递自启动以来已发送和接收的字节数
-    //aDlg.m_in_bytes = m_pIfTable->table[m_connections[m_connection_selected].index].dwInOctets - m_connections[m_connection_selected].in_bytes;
-    //aDlg.m_out_bytes = m_pIfTable->table[m_connections[m_connection_selected].index].dwOutOctets - m_connections[m_connection_selected].out_bytes;
+    if (m_connections.empty()) return;
+    // Keep an independent, stable table for the modal dialog. The monitor
+    // thread may grow/reallocate its snapshot while this window is open.
+    MIB_IFTABLE* localTable = nullptr;
+    DWORD localCapacity = 0;
+    if (!NetworkSampling::RefreshLegacyTable(localTable, localCapacity))
+    {
+        std::free(localTable);
+        return;
+    }
+    std::unique_ptr<MIB_IFTABLE, decltype(&std::free)> dialogTable(localTable, &std::free);
+    auto connectionsCopy = m_connections;
+    for (auto& connection : connectionsCopy)
+    {
+        connection.index = -1;
+        for (DWORD row = 0; row < dialogTable->dwNumEntries; ++row)
+        {
+            if (dialogTable->table[row].dwIndex == connection.interface_index)
+            {
+                connection.index = static_cast<int>(row);
+                break;
+            }
+        }
+    }
+    CNetworkInfoDlg aDlg(connectionsCopy, dialogTable->table, m_connection_selected);
     aDlg.m_start_time = m_start_time;
     aDlg.DoModal();
     //SetAlwaysOnTop(); //由于在“连接详情”对话框内设置了取消窗口置顶，所有在对话框关闭后，重新设置窗口置顶
@@ -2335,7 +2350,7 @@ BOOL CTrafficMonitorDlg::PreTranslateMessage(MSG* pMsg)
         ITMPlugin* plugin = theApp.m_plugins.GetPluginByItem(m_clicked_item.PluginItem());
         if (plugin != nullptr && plugin->GetAPIVersion() >= 4)
         {
-            if (m_clicked_item.PluginItem()->OnKeboardEvent(pMsg->wParam, ctrl, shift, alt, (void*)GetSafeHwnd(), IPluginItem::KF_TASKBAR_WND) != 0)
+            if (m_clicked_item.PluginItem()->OnKeboardEvent(static_cast<int>(pMsg->wParam), ctrl, shift, alt, (void*)GetSafeHwnd(), IPluginItem::KF_TASKBAR_WND) != 0)
                 return TRUE;
         }
     }
@@ -2466,13 +2481,14 @@ void CTrafficMonitorDlg::OnShowNotifyIcon()
 
 void CTrafficMonitorDlg::OnDestroy()
 {
+    // Keep the window alive while stopping the worker.
+    KillTimer(MONITOR_TIMER);
+    ExitMonitorThread();
     CDialog::OnDestroy();
 
     //程序退出时删除通知栏图标
     ::Shell_NotifyIcon(NIM_DELETE, &m_ntIcon);
 
-    // 停止监控线程
-    ExitMonitorThread();
 }
 
 

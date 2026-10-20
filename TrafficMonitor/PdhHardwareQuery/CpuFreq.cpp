@@ -2,6 +2,7 @@
 #include "CpuFreq.h"
 #include <powerbase.h>
 #include <sysinfoapi.h>
+#include <climits>
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////
@@ -23,8 +24,15 @@ CPdhCpuFreq::CPdhCpuFreq()
     SYSTEM_INFO si;
     GetSystemInfo(&si);
     auto ppInfo = std::vector<PROCESSOR_POWER_INFORMATION>(si.dwNumberOfProcessors);
-    auto status = CallNtPowerInformation(POWER_INFORMATION_LEVEL::ProcessorInformation,
-        NULL, 0, &ppInfo[0], sizeof(PROCESSOR_POWER_INFORMATION) * ppInfo.size());
+    if (ppInfo.empty())
+        return;
+    const size_t bytes = sizeof(PROCESSOR_POWER_INFORMATION) * ppInfo.size();
+    if (bytes > static_cast<size_t>(ULONG_MAX))
+        return;
+    const auto status = CallNtPowerInformation(POWER_INFORMATION_LEVEL::ProcessorInformation,
+        nullptr, 0, ppInfo.data(), static_cast<ULONG>(bytes));
+    if (status != 0)
+        return;
     for (size_t i = 0; i < ppInfo.size(); i++)
     {
         max_cpu_freq = max(max_cpu_freq, ppInfo[i].MaxMhz / 1000.f);
@@ -36,7 +44,7 @@ bool CPdhCpuFreq::GetCpuFreq(float& freq)
     double value{};
     if (QueryValue(value))
     {
-        freq = value / 100 * max_cpu_freq;
+        freq = static_cast<float>(value / 100.0 * max_cpu_freq);
         return true;
     }
     return false;

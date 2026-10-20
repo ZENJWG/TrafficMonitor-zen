@@ -45,12 +45,12 @@ void CHistoryTrafficListCtrl::OnNMCustomdraw(NMHDR *pNMHDR, LRESULT *pResult)
 			*pResult = CDRF_NOTIFYITEMDRAW;
 			break;
 		case CDDS_ITEMPREPAINT:			//如果为画ITEM之前就要进行颜色的改变
-			if (nmcd.dwItemSpec >= 0 && nmcd.dwItemSpec < m_item_rage_data.size())
+			if (nmcd.dwItemSpec < m_item_rage_data.size())
 			{
 				double range = m_item_rage_data[nmcd.dwItemSpec].data_value;
 				CDC* pDC = CDC::FromHandle(nmcd.hdc);		//获取绘图DC
 				CRect item_rect, draw_rect;
-				GetSubItemRect(nmcd.dwItemSpec,m_draw_item_range_row, LVIR_BOUNDS, item_rect);	//获取绘图单元格的矩形区域
+				GetSubItemRect(static_cast<int>(nmcd.dwItemSpec),m_draw_item_range_row, LVIR_BOUNDS, item_rect);	//获取绘图单元格的矩形区域
 				CDrawCommon::SetDrawRect(pDC, item_rect);		//设置绘图区域为当前列
                 //使用双缓冲绘图
                 {

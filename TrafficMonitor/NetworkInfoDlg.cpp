@@ -142,7 +142,7 @@ MIB_IFROW& CNetworkInfoDlg::GetConnectIfTable(int connection_index)
     if (connection_index >= 0 && connection_index < static_cast<int>(m_connections.size()))
     {
         int index = m_connections[connection_index].index;
-        if (m_pIfRow != nullptr)
+        if (m_pIfRow != nullptr && index >= 0)
             return m_pIfRow[index];
     }
     return nouse;

@@ -167,7 +167,7 @@ int CPluginManager::GetItemIndex(IPluginItem* item) const
     for (auto iter = m_plugins.begin(); iter != m_plugins.end(); ++iter)
     {
         if (*iter == item)
-            return iter - m_plugins.begin();
+            return static_cast<int>(iter - m_plugins.begin());
     }
     return -1;
 }
@@ -184,7 +184,7 @@ int CPluginManager::GetPluginIndex(ITMPlugin* plugin) const
     for (auto iter = m_modules.begin(); iter != m_modules.end(); ++iter)
     {
         if (iter->plugin == plugin)
-            return iter - m_modules.begin();
+            return static_cast<int>(iter - m_modules.begin());
     }
     return -1;
 }

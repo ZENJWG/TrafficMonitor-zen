@@ -797,7 +797,7 @@ void CTrafficMonitorApp::InitMenuResourse()
     CMenuIcon::AddIconToMenuItem(m_main_menu_plugin_sub_menu.GetSafeHmenu(), ID_PLUGIN_DETAIL, FALSE, GetMenuIcon(IDI_INFO));
     CMenu* main_menu_plugin = m_main_menu_plugin.GetSubMenu(0);
     main_menu_plugin->AppendMenu(MF_SEPARATOR);
-    main_menu_plugin->AppendMenu(MF_POPUP | MF_STRING, (UINT)m_main_menu_plugin_sub_menu.m_hMenu, _T("<plugin name>"));
+    main_menu_plugin->AppendMenu(MF_POPUP | MF_STRING, reinterpret_cast<UINT_PTR>(m_main_menu_plugin_sub_menu.GetSafeHmenu()), _T("<plugin name>"));
 
     m_taskbar_menu_plugin_sub_menu.CreatePopupMenu();
     m_taskbar_menu_plugin_sub_menu.AppendMenu(MF_STRING | MF_ENABLED, ID_PLUGIN_OPTIONS_TASKBAR, CCommon::LoadText(IDS_PLUGIN_OPTIONS, _T("...")));
@@ -806,7 +806,7 @@ void CTrafficMonitorApp::InitMenuResourse()
     CMenuIcon::AddIconToMenuItem(m_taskbar_menu_plugin_sub_menu.GetSafeHmenu(), ID_PLUGIN_DETAIL_TASKBAR, FALSE, GetMenuIcon(IDI_INFO));
     CMenu* taskbar_menu_plugin = m_taskbar_menu_plugin.GetSubMenu(0);
     taskbar_menu_plugin->AppendMenu(MF_SEPARATOR);
-    taskbar_menu_plugin->AppendMenu(MF_POPUP | MF_STRING, (UINT)m_taskbar_menu_plugin_sub_menu.m_hMenu, _T("<plugin name>"));
+    taskbar_menu_plugin->AppendMenu(MF_POPUP | MF_STRING, reinterpret_cast<UINT_PTR>(m_taskbar_menu_plugin_sub_menu.GetSafeHmenu()), _T("<plugin name>"));
 
     //为菜单项添加图标
     auto addIconsForMainWindowMenu = [&](const CMenu& menu)
@@ -1116,8 +1116,8 @@ BOOL CTrafficMonitorApp::InitInstance()
     }
     else if (nResponse == -1)
     {
-        TRACE(traceAppMsg, 0, "警告: 对话框创建失败，应用程序将意外终止。\n");
-        TRACE(traceAppMsg, 0, "警告: 如果您在对话框上使用 MFC 控件，则无法 #define _AFX_NO_MFC_CONTROLS_IN_DIALOGS。\n");
+        TRACE(traceAppMsg, 0, _T("警告: 对话框创建失败，应用程序将意外终止。\n"));
+        TRACE(traceAppMsg, 0, _T("警告: 如果您在对话框上使用 MFC 控件，则无法 #define _AFX_NO_MFC_CONTROLS_IN_DIALOGS。\n"));
     }
 
     // 删除上面创建的 shell 管理器。
@@ -1406,8 +1406,8 @@ double CTrafficMonitorApp::GetMonitorValue(MonitorItem item)
 {
     switch (item)
     {
-    case MI_UP: return m_out_speed;
-    case MI_DOWN: return m_in_speed;
+    case MI_UP: return static_cast<double>(m_out_speed);
+    case MI_DOWN: return static_cast<double>(m_in_speed);
     case MI_CPU: return m_cpu_usage;
     case MI_MEMORY: return m_memory_usage;
     case MI_GPU_USAGE: return m_gpu_usage;
@@ -1417,8 +1417,8 @@ double CTrafficMonitorApp::GetMonitorValue(MonitorItem item)
     case MI_MAIN_BOARD_TEMP: return m_main_board_temperature;
     case MI_HDD_USAGE: return m_hdd_usage;
     case MI_CPU_FREQ: return m_cpu_freq;
-    case MI_TODAY_UP_TRAFFIC: return m_today_up_traffic;
-    case MI_TODAY_DOWN_TRAFFIC: return m_today_down_traffic;
+    case MI_TODAY_UP_TRAFFIC: return static_cast<double>(m_today_up_traffic);
+    case MI_TODAY_DOWN_TRAFFIC: return static_cast<double>(m_today_down_traffic);
     }
     return 0.0;
 }

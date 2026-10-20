@@ -1,4 +1,5 @@
 ﻿#include "stdafx.h"
+#include <climits>
 #include "FileDialogEx.h"
 #include <sstream>
 
@@ -35,7 +36,8 @@ CFileDialogEx::CFileDialogEx(BOOL bOpenFileDialog, LPCWSTR lpszDefExt, LPCWSTR l
                 COMDLG_FILTERSPEC filterSpec = { m_filterDescriptions[i].c_str(), m_filterSpecsStrings[i].c_str()};
                 m_filterSpecs.push_back(filterSpec);
             }
-            pFileDialog->SetFileTypes(m_filterSpecs.size(), m_filterSpecs.data());
+            if (m_filterSpecs.size() <= static_cast<size_t>(UINT_MAX))
+                pFileDialog->SetFileTypes(static_cast<UINT>(m_filterSpecs.size()), m_filterSpecs.data());
         }
     }
 }

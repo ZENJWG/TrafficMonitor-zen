@@ -334,7 +334,7 @@ void CHistoryTrafficListDlg::OnSize(UINT nType, int cx, int cy)
         {
             for (size_t i{}; i < widths.size(); i++)
             {
-                m_history_list.SetColumnWidth(i, widths[i]);
+                m_history_list.SetColumnWidth(static_cast<int>(i), widths[i]);
             }
         }
     }

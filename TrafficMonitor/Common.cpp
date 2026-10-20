@@ -530,7 +530,7 @@ BOOL CCommon::CreateFileShortcut(LPCTSTR lpszLnkFileDir, LPCTSTR lpszFileName, L
         }
         //注意后缀名要从.exe改为.lnk
         swprintf_s(szBuffer, L"%s\\%s", lpszLnkFileDir, pstr);
-        int nLen = wcslen(szBuffer);
+        const size_t nLen = wcslen(szBuffer);
         szBuffer[nLen - 3] = L'l';
         szBuffer[nLen - 2] = L'n';
         szBuffer[nLen - 1] = L'k';
@@ -1031,7 +1031,8 @@ void CCommon::NormalizeFont(LOGFONT& font)
         name = name.substr(0, index);
     }
     //wcsncpy_s(font.lfFaceName, name.c_str(), 32);
-    WStringCopy(font.lfFaceName, 32, name.c_str(), name.size());
+    WStringCopy(font.lfFaceName, LF_FACESIZE, name.c_str(),
+        static_cast<int>((std::min)(name.size(), static_cast<size_t>(LF_FACESIZE - 1))));
 }
 
 void CCommon::WStringCopy(wchar_t* str_dest, int dest_size, const wchar_t* str_source, int source_size)

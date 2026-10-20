@@ -419,7 +419,7 @@ BOOL CTaskBarSettingsDlg::OnInitDialog()
         m_modify_default_style_menu.AppendMenu(MF_STRING | MF_ENABLED, ID_MODIFY_DEFAULT_STYLE1 + i, item_name);
     }
     m_default_style_menu.AppendMenu(MF_SEPARATOR);
-    m_default_style_menu.AppendMenu(MF_POPUP | MF_STRING, (UINT)m_modify_default_style_menu.m_hMenu, CCommon::LoadText(IDS_MODIFY_PRESET));
+    m_default_style_menu.AppendMenu(MF_POPUP | MF_STRING, reinterpret_cast<UINT_PTR>(m_modify_default_style_menu.GetSafeHmenu()), CCommon::LoadText(IDS_MODIFY_PRESET));
 
     //获取副显示器的数量
     std::vector<HWND> secondary_displays;

@@ -252,16 +252,16 @@ void CTaskBarDlg::DrawDisplayItem(IDrawCommon& drawer, DisplayItem type, CRect r
             figure_value = theApp.m_gpu_usage;
             break;
         case TDI_CPU_TEMP:
-            figure_value = theApp.m_cpu_temperature;
+            figure_value = static_cast<int>(theApp.m_cpu_temperature);
             break;
         case TDI_GPU_TEMP:
-            figure_value = theApp.m_gpu_temperature;
+            figure_value = static_cast<int>(theApp.m_gpu_temperature);
             break;
         case TDI_HDD_TEMP:
-            figure_value = theApp.m_hdd_temperature;
+            figure_value = static_cast<int>(theApp.m_hdd_temperature);
             break;
         case TDI_MAIN_BOARD_TEMP:
-            figure_value = theApp.m_main_board_temperature;
+            figure_value = static_cast<int>(theApp.m_main_board_temperature);
             break;
         case TDI_HDD_USAGE:
             figure_value = theApp.m_hdd_usage;
@@ -323,7 +323,7 @@ void CTaskBarDlg::DrawPluginItem(IDrawCommon& drawer, IPluginItem* item, CRect r
     {
         if (item->IsDrawResourceUsageGraph())
         {
-             int figure_value = item->GetResourceUsageGraphValue() * 100;
+             int figure_value = static_cast<int>(item->GetResourceUsageGraphValue() * 100.0f);
             //横向滚动图
             if (theApp.m_taskbar_data.cm_graph_type)
             {
@@ -1192,7 +1192,7 @@ BOOL CTaskBarDlg::PreTranslateMessage(MSG* pMsg)
         ITMPlugin* plugin = theApp.m_plugins.GetPluginByItem(m_clicked_item.PluginItem());
         if (plugin != nullptr && plugin->GetAPIVersion() >= 4)
         {
-            if (m_clicked_item.PluginItem()->OnKeboardEvent(pMsg->wParam, ctrl, shift, alt, (void*)GetSafeHwnd(), IPluginItem::KF_TASKBAR_WND) != 0)
+            if (m_clicked_item.PluginItem()->OnKeboardEvent(static_cast<int>(pMsg->wParam), ctrl, shift, alt, (void*)GetSafeHwnd(), IPluginItem::KF_TASKBAR_WND) != 0)
                 return TRUE;
         }
     }
@@ -1392,7 +1392,7 @@ int CTaskBarDlg::CalculateNetspeedPercent(unsigned __int64 net_speed)
     if (net_speed >= max_value)
         percet = 100;
     else if (max_value > 0)
-        percet = net_speed * 100 / max_value;
+        percet = static_cast<int>((static_cast<double>(net_speed) * 100.0) / static_cast<double>(max_value));
     return percet;
 }
 

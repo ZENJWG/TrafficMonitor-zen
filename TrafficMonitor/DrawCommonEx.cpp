@@ -1,4 +1,5 @@
 ﻿#include "stdafx.h"
+#include <cmath>
 #include "DrawCommonEx.h"
 #include "DrawCommonHelper.h"
 
@@ -190,8 +191,8 @@ void CDrawCommonEx::GetTextExtent(const wchar_t* lpszString, int& w, int& h)
     Gdiplus::Font font(m_pDC->GetSafeHdc());
     Gdiplus::RectF textSize;
     m_pGraphics->MeasureString(lpszString, -1, &font, Gdiplus::PointF(0, 0), &textSize);
-    w = textSize.Width + 0.5;
-    h = textSize.Height + 0.5;
+    w = static_cast<int>(std::lround(textSize.Width));
+    h = static_cast<int>(std::lround(textSize.Height));
 }
 
 void CDrawCommonEx::DrawBitmap(HBITMAP hbitmap, CPoint start_point, CSize size, StretchMode stretch_mode, BYTE alpha)
@@ -228,10 +229,16 @@ COLORREF CGdiPlusHelper::GdiplusColorToCOLORREF(Gdiplus::Color color)
 
 CRect CGdiPlusHelper::GdiplusRectToCRect(Gdiplus::RectF rect)
 {
-    return CRect(rect.GetLeft(), rect.GetTop(), rect.GetRight(), rect.GetBottom());
+    return CRect(static_cast<int>(std::lround(rect.GetLeft())),
+        static_cast<int>(std::lround(rect.GetTop())),
+        static_cast<int>(std::lround(rect.GetRight())),
+        static_cast<int>(std::lround(rect.GetBottom())));
 }
 
 Gdiplus::RectF CGdiPlusHelper::CRectToGdiplusRect(CRect rect)
 {
-    return Gdiplus::RectF(rect.left, rect.top, rect.Width(), rect.Height());
+    return Gdiplus::RectF(static_cast<Gdiplus::REAL>(rect.left),
+        static_cast<Gdiplus::REAL>(rect.top),
+        static_cast<Gdiplus::REAL>(rect.Width()),
+        static_cast<Gdiplus::REAL>(rect.Height()));
 }

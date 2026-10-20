@@ -323,7 +323,7 @@ void LanguageInfo::fromConfigString(const wstring& config_str)
     {
         translator = parts[2];
     }
-    language_id = LocaleNameToLCID(bcp_47.c_str(), 0);
+    language_id = LANGIDFROMLCID(LocaleNameToLCID(bcp_47.c_str(), 0));
 }
 
 bool LanguageInfo::isEmpty() const

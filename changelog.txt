@@ -1,0 +1,168 @@
+TrafficMonitor - CHANGELOG - by Zeneric
+==========================
+Patch date: 2026-10-20
+Base: TrafficMonitor-master.zip (user-provided original source)
+Latest package: TrafficMonitor-warnings-fixed.zip
+
+This changelog describes changes relative to the original uploaded project.
+These are local source patches, not an upstream TrafficMonitor release.
+All filenames below are relative to TrafficMonitor-master/.
+
+========================================================================
+2026-10-20 - FOLLOW-UP: MSVC COMPILE ERRORS AND WARNINGS
+========================================================================
+
+FIXED - Compilation blockers reported from Visual Studio 2022 / MSVC v143
+  * TrafficMonitor/AdapterCommon.h
+    - Removed a literal backslash-t accidentally inserted in the declaration
+      of NetWorkConection::interface_index; this caused C2017/C3646/C2059/
+      C2334, with downstream C2039 failures.
+  * TrafficMonitor/TaskBarDlgDrawCommon.h
+    - Avoided the Windows max macro expanding std::max, which caused the
+      repeated C2589/C3878/C2760 template errors across many .cpp files.
+  * TrafficMonitor/TrafficRateMath.h
+    - Avoided Windows max macro expansion of
+      std::numeric_limits<...>::max(), preventing related parse failures.
+
+ADDRESSED - Warning locations appearing in the supplied MSBuild log
+  * C4267: size_t-to-int/UINT/ULONG conversions and index calculations.
+    Affected: CTabCtrlEx.cpp, AdapterCommon.cpp, FileDialogEx.cpp,
+    FilePathHelper.cpp, Common.cpp, HistoryTrafficListDlg.cpp,
+    PdhHardwareQuery/CpuFreq.cpp, PluginManagerDlg.cpp,
+    TrafficMonitorDlg.cpp.
+  * C4244: numeric narrowing (including floats, integer coordinates and
+    Windows list-view data).
+    Affected: DrawCommonEx.cpp, ColorSettingListCtrl.cpp,
+    HistoryTrafficListCtrl.cpp, CommonData.cpp, StrTable.cpp,
+    TaskBarDlg.cpp, TrafficMonitor.cpp, TrafficMonitorDlg.cpp,
+    PluginManager.cpp, PdhHardwareQuery/CpuFreq.cpp.
+  * C4311/C4302: prevented pointer truncation by using UINT_PTR when
+    passing HMENU values to CMenu::AppendMenu.
+    Affected: TrafficMonitor.cpp, TaskBarSettingsDlg.cpp.
+  * C4018: corrected signed/unsigned scrollbar comparisons.
+    Affected: TabDlg.cpp.
+  * C4566: changed affected Chinese debug strings to Unicode-aware
+    _T(...) literals.
+    Affected: TrafficMonitor.cpp.
+  * C4003: fixed Windows max macro expansion at reported sites.
+
+OTHER CORRECTNESS/BUILD CHANGES
+  * PdhHardwareQuery/CpuFreq.cpp
+    - Added result and buffer-size checks before reading CPU information.
+  * TaskBarDlg.cpp
+    - Prevented integer overflow in network-percent calculation.
+  * TrafficMonitor/print_compile_time.bat
+    - Avoided the harmless "Could Not Find compile_time.txt" message
+      when the generated file is absent.
+  * tools/build.ps1 and build.bat
+    - Added MSBuild diagnostic .binlog output under build-logs/.
+    - Added optional -WarningsAsErrors mode for strict compilation.
+  * .gitignore
+    - Updated to account for generated build artifacts.
+  * Added WARNING_FIXES.md documenting the original diagnostic categories.
+  * Added tests/WindowsMaxMacroCompileTest.cpp to guard macro conflicts.
+
+NOTE: These are fixes to the warning sites in the supplied log; they do not
+prove that all MSVC warnings have disappeared. The logged Windows build
+failed on the earlier package, and no successful new Windows build has been
+observed here.
+
+========================================================================
+2026-10-20 - INITIAL STABILIZATION AND MODERNIZATION
+========================================================================
+
+NETWORK ACQUISITION / TRAFFIC ACCURACY
+  * Added TrafficMonitor/NetworkSampling.h:
+    - Validated, bounded-retry GetIfTable buffer handling.
+    - GetIfTable2-backed 64-bit counters keyed by interface identity.
+    - Aggregate selected interfaces without duplicate counting.
+    - Reject incomplete/failed counter snapshots rather than trusting
+      uninitialized or partial network data.
+  * Added TrafficMonitor/TrafficRateMath.h:
+    - Monotonic, elapsed-time-based traffic rate calculation.
+    - Separate upload/download deltas and reset handling.
+    - Guard for zero or negative sample intervals; saturating conversion.
+  * Updated TrafficMonitor/TrafficMonitorDlg.cpp and .h:
+    - Avoid reading invalid interface-table buffers.
+    - Re-resolve interface row using interface ID after enumeration changes.
+    - Switch active rate sampling to 64-bit traffic counters.
+    - Clear stale speeds when a snapshot cannot be acquired.
+    - Move from 10ms worker busy-polling to event-driven notifications.
+    - Use atomics for worker exit/pending state; coordinate orderly shutdown.
+    - Use independent network table when showing modal network information.
+
+NETWORK ADAPTER MANAGEMENT
+  * Updated TrafficMonitor/AdapterCommon.cpp and .h:
+    - Use RAII-managed legacy adapter enumeration buffer.
+    - Initialize counters and row indices safely (-1 until matched).
+    - Validate row indices before dereferencing interface tables.
+    - Record interface ID used for sampling.
+    - Make IP refresh lookups linear instead of nested.
+    - Retain description matching for existing saved preferences.
+  * Updated TrafficMonitor/NetworkInfoDlg.cpp:
+    - Skip invalid negative indices when an interface does not match.
+
+RENDERING / BACKGROUND CLEANUP
+  * Updated TrafficMonitor/TaskBarDlgDrawCommon.h:
+    - Replace detached cache cleanup thread with stoppable/joined
+      C++20 std::jthread and stop-aware condition-variable waiting.
+    - Prevent inserting a default/uninitialized cached resource after
+      creation fails.
+
+WINDOWS BUILD AUTOMATION
+  * Added build.bat and tools/build.ps1:
+    - Default build: x64 / lite / Release, original v143 solution.
+    - Find VS 2022 Build Tools, MSVC v143, MFC, Windows SDK.
+    - Attempt to install missing compatible prerequisites; check for
+      updates unless -NoUpdate is supplied.
+    - Full build requests additional C++/CLI and .NET targeting components.
+    - Invoke MSBuild and propagate success/failure.
+    - Keep the bundled LibreHardwareMonitorLib.dll pinned; do not
+      silently replace third-party binaries with unreviewed releases.
+  * Added tests/TrafficRateMathTest.cpp with portable rate-math cases.
+  * Added PATCH_NOTES.md documenting the changes, build and open risks.
+
+========================================================================
+VERIFICATION STATUS AT TIME OF THIS CHANGELOG
+========================================================================
+
+PASS (non-Windows source-level checks):
+  * Portable C++20 traffic rate tests using g++.
+  * Windows max-macro regression test using g++.
+  * XML parsing of bundled Visual Studio project files.
+
+NOT VERIFIED:
+  * Successful native Visual Studio/MSBuild/MFC compilation of latest ZIP.
+  * Zero compiler warnings in an actual MSVC build.
+  * Runtime testing of network hotplug, VPN, sleep/resume, rendering,
+    plugin compatibility and shutdown behavior on Windows.
+
+KNOWN REMAINING RISKS (not claimed fixed):
+  * Some existing worker/UI shared state still requires a larger
+    thread-ownership/data-race refactor.
+  * Adapter enumeration still uses legacy IPv4-oriented GetAdaptersInfo
+    for compatibility with saved adapter preferences.
+  * Initial automatic adapter-selection heuristic still consults older
+    32-bit counters; active speed calculation uses 64-bit counters.
+  * Full native ARM64EC / C++/CLI configurations are untested.
+  * CPU/GPU rendering improvements are not backed by Windows profiling.
+  * No comprehensive security audit of plugin loading, update pathways,
+    or bundled third-party dependencies has been completed.
+
+========================================================================
+BUILD / VALIDATION INSTRUCTIONS
+========================================================================
+
+  build.bat
+    Default: x64 lite Release
+
+  build.bat x64 full Release
+    Full configuration with hardware-monitoring dependencies.
+
+  build.bat x64 lite Release -NoUpdate -WarningsAsErrors
+    Strict diagnostic check without prereq update attempts.
+
+  build-logs/TrafficMonitor-x64-lite-Release.binlog
+    Binary MSBuild diagnostics produced by the updated build tooling.
+
+See PATCH_NOTES.md and WARNING_FIXES.md for additional technical details.

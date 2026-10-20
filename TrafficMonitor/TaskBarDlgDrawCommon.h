@@ -4,6 +4,8 @@
 #include <chrono>
 #include <mutex>
 #include <thread>
+#include <condition_variable>
+#include <stop_token>
 #include <type_traits>
 #include <initializer_list>
 #include "IDrawCommon.h"
@@ -771,30 +773,31 @@ private:
 
         std::mutex m_gc_mutex{};
         std::chrono::seconds m_gc_interval{std::chrono::seconds(60)};
+        std::mutex m_gc_wait_mutex{};
+        std::condition_variable_any m_gc_wakeup{};
     };
 
     Microsoft::WRL::ComPtr<ID2D1RenderTarget> m_p_render_target;
     std::shared_ptr<HeapData> m_sp_data{std::make_shared<HeapData>()};
-    std::thread m_gc_thread{
-        [wp_data = std::weak_ptr<HeapData>(m_sp_data)]()
+    std::jthread m_gc_thread{
+        [wp_data = std::weak_ptr<HeapData>(m_sp_data)](std::stop_token stop)
         {
-            do
+            while (!stop.stop_requested())
             {
                 auto sp_data = wp_data.lock();
                 if (!sp_data)
-                {
                     break;
-                }
-
                 CD2D1ResCacheBase::GCImpl(sp_data);
 
-                decltype(sp_data->m_gc_interval) gc_interval;
+                std::chrono::seconds interval;
                 {
                     TRAFFICMONITOR_CD2D1BITMAPCACHE_LOCK_GC_INTERVAL(sp_data);
-                    gc_interval = sp_data->m_gc_interval;
+                    interval = sp_data->m_gc_interval;
                 }
-                std::this_thread::sleep_for(gc_interval);
-            } while (true);
+                std::unique_lock wait_lock(sp_data->m_gc_wait_mutex);
+                sp_data->m_gc_wakeup.wait_for(wait_lock, stop, interval,
+                    [] { return false; });
+            }
         }};
 
 public:
@@ -803,7 +806,9 @@ public:
     {}
 
     ~CD2D1ResCacheBase() {
-        m_gc_thread.detach();
+        m_gc_thread.request_stop();
+        m_sp_data->m_gc_wakeup.notify_all();
+        // jthread joins before its captured cache data is destroyed.
     }
 
     // 尚不支持复制或移动
@@ -854,7 +859,10 @@ public:
         else
         {
             AddResource(res);
-            return m_sp_data->m_cache_map[res].m_cache;
+            const auto created = m_sp_data->m_cache_map.find(res);
+            return created == m_sp_data->m_cache_map.end()
+                ? Microsoft::WRL::ComPtr<ID2D1Bitmap>{}
+                : created->second.m_cache;
         }
     }
 
@@ -898,7 +906,8 @@ public:
     void GC() { GCImpl(m_sp_data); }
     void SetGCInterval(const std::chrono::seconds interval) {
         TRAFFICMONITOR_CD2D1BITMAPCACHE_LOCK_GC_INTERVAL(m_sp_data);
-        m_sp_data->m_gc_interval = interval;
+        m_sp_data->m_gc_interval = (std::max)(interval, std::chrono::seconds(1));
+        m_sp_data->m_gc_wakeup.notify_all();
     }
     void SetExpireInterval(const std::chrono::seconds interval) {
         TRAFFICMONITOR_CD2D1BITMAPCACHE_LOCK_CACHE_MAP_AND_EXPIRE_INTERVAL(m_sp_data);
